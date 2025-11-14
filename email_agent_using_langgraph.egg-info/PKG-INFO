@@ -1,0 +1,20 @@
+Metadata-Version: 2.4
+Name: email-agent-using-langgraph
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: dotenv>=0.9.9
+Requires-Dist: html2text>=2025.4.15
+Requires-Dist: langchain>=1.0.2
+Requires-Dist: langchain-openai>=1.0.1
+Requires-Dist: langgraph>=1.0.1
+Requires-Dist: langgraph-cli[inmem]>=0.4.4
+Requires-Dist: langsmith[pytest]>=0.4.38
+Requires-Dist: pyppeteer>=2.0.0
+Requires-Dist: pytest>=8.4.2
+Requires-Dist: rich>=14.2.0
+Provides-Extra: dev
+Requires-Dist: mypy>=1.11.1; extra == "dev"
+Requires-Dist: ruff>=0.6.1; extra == "dev"

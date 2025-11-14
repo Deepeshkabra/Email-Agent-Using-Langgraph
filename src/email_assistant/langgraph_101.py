@@ -15,7 +15,7 @@ def write_email(to: str, subject: str, content: str) -> str:
     return f"Email sent to {to} with subject '{subject}' and content: {content}"
 
 llm = ChatOpenAI(
-        model="minimax/minimax-m2:free", 
+        model="openai/gpt-oss-20b", 
         api_key=openrouter_api_key,
         base_url="https://openrouter.ai/api/v1",
     )

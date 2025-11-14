@@ -1,0 +1,15 @@
+python-dotenv>=1.0.1
+dotenv>=0.9.9
+html2text>=2025.4.15
+langchain>=1.0.2
+langchain-openai>=1.0.1
+langgraph>=1.0.1
+langgraph-cli[inmem]>=0.4.4
+langsmith[pytest]>=0.4.38
+pyppeteer>=2.0.0
+pytest>=8.4.2
+rich>=14.2.0
+
+[dev]
+mypy>=1.11.1
+ruff>=0.6.1

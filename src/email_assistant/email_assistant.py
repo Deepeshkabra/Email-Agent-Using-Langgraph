@@ -21,7 +21,7 @@ tools_by_name = get_tools_by_name(tools)
 
 # Initialize the LLM for use with router / structured output
 llm = ChatOpenAI(
-    model="deepseek/deepseek-r1-0528-qwen3-8b:free",
+    model="openai/gpt-oss-20b",
     api_key=openrouter_api_key,
     base_url="https://openrouter.ai/api/v1",
 )
@@ -29,7 +29,7 @@ llm_router = llm.with_structured_output(RouterSchema)
 
 # Initialize the LLM, enforcing tool use (of any available tools) for agent
 llm = ChatOpenAI(
-    model="minimax/minimax-m2:free",
+    model="openai/gpt-oss-20b",
     api_key=openrouter_api_key,
     base_url="https://openrouter.ai/api/v1",
 )
