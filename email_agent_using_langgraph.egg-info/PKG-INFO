@@ -15,6 +15,7 @@ Requires-Dist: langsmith[pytest]>=0.4.38
 Requires-Dist: pyppeteer>=2.0.0
 Requires-Dist: pytest>=8.4.2
 Requires-Dist: rich>=14.2.0
+Requires-Dist: ruff>=0.14.2
 Provides-Extra: dev
 Requires-Dist: mypy>=1.11.1; extra == "dev"
 Requires-Dist: ruff>=0.6.1; extra == "dev"

@@ -19,7 +19,7 @@ HITL_TOOLS_PROMPT = """
 """
 
 # Tool descriptions for HITL with memory workflow
-# Note: Additional memory specific tools could be added here 
+# Note: Additional memory specific tools could be added here
 HITL_MEMORY_TOOLS_PROMPT = """
 1. write_email(to, subject, content) - Send emails to specified recipients
 2. schedule_meeting(attendees, subject, duration_minutes, preferred_day, start_time) - Schedule calendar meetings where preferred_day is a datetime object

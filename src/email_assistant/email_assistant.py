@@ -5,13 +5,22 @@ import os
 
 from email_assistant.tools import get_tools, get_tools_by_name
 from email_assistant.tools.default.prompt_templates import AGENT_TOOLS_PROMPT
-from email_assistant.prompts import triage_system_prompt, triage_user_prompt, agent_system_prompt, default_background, default_triage_instructions, default_response_preferences, default_cal_preferences
+from email_assistant.prompts import (
+    triage_system_prompt,
+    triage_user_prompt,
+    agent_system_prompt,
+    default_background,
+    default_triage_instructions,
+    default_response_preferences,
+    default_cal_preferences,
+)
 from email_assistant.schemas import State, RouterSchema, StateInput
 from email_assistant.utils import parse_email, format_email_markdown
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 from dotenv import load_dotenv
+
 load_dotenv()
 
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
@@ -25,7 +34,7 @@ llm = ChatOpenAI(
     api_key=openrouter_api_key,
     base_url="https://openrouter.ai/api/v1",
 )
-llm_router = llm.with_structured_output(RouterSchema) 
+llm_router = llm.with_structured_output(RouterSchema)
 
 # Initialize the LLM, enforcing tool use (of any available tools) for agent
 llm = ChatOpenAI(
@@ -35,6 +44,7 @@ llm = ChatOpenAI(
 )
 llm_with_tools = llm.bind_tools(tools, tool_choice="any")
 
+
 # Nodes
 def llm_call(state: State):
     """LLM decides whether to call a tool or not"""
@@ -43,18 +53,21 @@ def llm_call(state: State):
         "messages": [
             llm_with_tools.invoke(
                 [
-                    {"role": "system", "content": agent_system_prompt.format(
-                        tools_prompt=AGENT_TOOLS_PROMPT,
-                        background=default_background,
-                        response_preferences=default_response_preferences, 
-                        cal_preferences=default_cal_preferences)
+                    {
+                        "role": "system",
+                        "content": agent_system_prompt.format(
+                            tools_prompt=AGENT_TOOLS_PROMPT,
+                            background=default_background,
+                            response_preferences=default_response_preferences,
+                            cal_preferences=default_cal_preferences,
+                        ),
                     },
-                    
                 ]
                 + state["messages"]
             )
         ]
     }
+
 
 def tool_node(state: State):
     """Performs the tool call"""
@@ -63,8 +76,11 @@ def tool_node(state: State):
     for tool_call in state["messages"][-1].tool_calls:
         tool = tools_by_name[tool_call["name"]]
         observation = tool.invoke(tool_call["args"])
-        result.append({"role": "tool", "content" : observation, "tool_call_id": tool_call["id"]})
+        result.append(
+            {"role": "tool", "content": observation, "tool_call_id": tool_call["id"]}
+        )
     return {"messages": result}
+
 
 # Conditional edge function
 def should_continue(state: State) -> Literal["Action", "__end__"]:
@@ -72,11 +88,12 @@ def should_continue(state: State) -> Literal["Action", "__end__"]:
     messages = state["messages"]
     last_message = messages[-1]
     if last_message.tool_calls:
-        for tool_call in last_message.tool_calls: 
+        for tool_call in last_message.tool_calls:
             if tool_call["name"] == "Done":
                 return END
             else:
                 return "Action"
+
 
 # Build workflow
 agent_builder = StateGraph[State, None, State, State](State)
@@ -101,6 +118,7 @@ agent_builder.add_edge("environment", "llm_call")
 # Compile the agent
 agent = agent_builder.compile()
 
+
 def triage_router(state: State) -> Command[Literal["response_agent", "__end__"]]:
     """Analyze email content to decide if we should respond, notify, or ignore.
 
@@ -111,15 +129,14 @@ def triage_router(state: State) -> Command[Literal["response_agent", "__end__"]]
     """
     author, to, subject, email_thread = parse_email(state["email_input"])
     system_prompt = triage_system_prompt.format(
-        background=default_background,
-        triage_instructions=default_triage_instructions
+        background=default_background, triage_instructions=default_triage_instructions
     )
 
     user_prompt = triage_user_prompt.format(
         author=author, to=to, subject=subject, email_thread=email_thread
     )
 
-    # Create email markdown for Agent Inbox in case of notification  
+    # Create email markdown for Agent Inbox in case of notification
     email_markdown = format_email_markdown(subject, author, to, email_thread)
 
     # Run the router LLM
@@ -139,13 +156,13 @@ def triage_router(state: State) -> Command[Literal["response_agent", "__end__"]]
         # Add the email to the messages
         update = {
             "classification_decision": result.classification,
-            "messages": [{"role": "user",
-                            "content": f"Respond to the email: {email_markdown}"
-                        }],
+            "messages": [
+                {"role": "user", "content": f"Respond to the email: {email_markdown}"}
+            ],
         }
     elif result.classification == "ignore":
         print("🚫 Classification: IGNORE - This email can be safely ignored")
-        update =  {
+        update = {
             "classification_decision": result.classification,
         }
         goto = END
@@ -159,6 +176,7 @@ def triage_router(state: State) -> Command[Literal["response_agent", "__end__"]]
     else:
         raise ValueError(f"Invalid classification: {result.classification}")
     return Command(goto=goto, update=update)
+
 
 # Build workflow
 overall_workflow = (

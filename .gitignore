@@ -4,3 +4,6 @@
 *.venv
 *__pycache__
 test_script.py
+/cursor_chats
+.pytest_cache
+.ruff_cache

@@ -9,6 +9,7 @@ langsmith[pytest]>=0.4.38
 pyppeteer>=2.0.0
 pytest>=8.4.2
 rich>=14.2.0
+ruff>=0.14.2
 
 [dev]
 mypy>=1.11.1
