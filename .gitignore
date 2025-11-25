@@ -7,3 +7,4 @@ test_script.py
 /cursor_chats
 .pytest_cache
 .ruff_cache
+**/Notes
