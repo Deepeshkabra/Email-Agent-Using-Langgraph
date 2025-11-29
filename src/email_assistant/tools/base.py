@@ -31,24 +31,24 @@ def get_tools(
     }
 
     # Add Gmail tools if requested
-    # if include_gmail:
-    #     try:
-    #         from email_assistant.tools.gmail.gmail_tools import (
-    #             fetch_emails_tool,
-    #             send_email_tool,
-    #             check_calendar_tool,
-    #             schedule_meeting_tool
-    #         )
+    if include_gmail:
+        try:
+            from email_assistant.tools.gmail import (
+                fetch_emails_tool,
+                send_email_tool,
+                check_calendar_tool,
+                schedule_meeting_tool
+            )
 
-    #         all_tools.update({
-    #             "fetch_emails_tool": fetch_emails_tool,
-    #             "send_email_tool": send_email_tool,
-    #             "check_calendar_tool": check_calendar_tool,
-    #             "schedule_meeting_tool": schedule_meeting_tool,
-    #         })
-    #     except ImportError:
-    #         # If Gmail tools aren't available, continue without them
-    #         pass
+            all_tools.update({
+                "fetch_emails_tool": fetch_emails_tool,
+                "send_email_tool": send_email_tool,
+                "check_calendar_tool": check_calendar_tool,
+                "schedule_meeting_tool": schedule_meeting_tool,
+            })
+        except ImportError:
+            # If Gmail tools aren't available, continue without them
+            pass
 
     if tool_names is None:
         return list(all_tools.values())

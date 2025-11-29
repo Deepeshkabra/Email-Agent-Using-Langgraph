@@ -10,6 +10,10 @@ pyppeteer>=2.0.0
 pytest>=8.4.2
 rich>=14.2.0
 ruff>=0.14.2
+google-auth-oauthlib>=1.2.3
+google-auth-httplib2>=0.2.1
+google-api-python-client>=2.187.0
+python-dateutil>=2.8.2
 
 [dev]
 mypy>=1.11.1

@@ -8,3 +8,5 @@ test_script.py
 .pytest_cache
 .ruff_cache
 **/Notes
+**/.secrets
+**/.cursorignore
