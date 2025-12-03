@@ -29,7 +29,7 @@ llm = ChatOpenAI(
     base_url="https://openrouter.ai/api/v1",
     extra_body={"provider": {
         "require_parameters": True,
-        "only": ["google-vertex"],
+        "only": ["google-vertex"],++
         "allow_fallbacks": False,
     }},
 )
