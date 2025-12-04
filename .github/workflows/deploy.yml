@@ -47,5 +47,5 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service email-assistant --detach
+        run: railway up --service Email-Agent-Using-Langgraph --detach
 
