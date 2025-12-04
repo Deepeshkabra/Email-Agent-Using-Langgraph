@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing_extensions import TypedDict, Literal
 from langgraph.graph import MessagesState
+from pydantic import BaseModel, Field
+from typing_extensions import Literal, TypedDict
 
 
 class RouterSchema(BaseModel):
@@ -17,17 +17,18 @@ class RouterSchema(BaseModel):
 
 
 class StateInput(TypedDict):
-    # This is the input to the state
+    """This is the input to the state."""
     email_input: dict
 
 
 class State(MessagesState):
-    # This state class has the messages key build in
+    """This state class has the messages key build in."""
     email_input: dict
     classification_decision: Literal["ignore", "respond", "notify"]
 
 
 class EmailData(TypedDict):
+    """Email data."""
     id: str
     thread_id: str
     from_email: str

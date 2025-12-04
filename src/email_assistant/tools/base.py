@@ -1,9 +1,10 @@
-from typing import Dict, List, Callable, Any, Optional
+from typing import Dict, List
+
 from langchain_core.tools import BaseTool
 
 
 def get_tools(
-    tool_names: Optional[List[str]] = None, include_gmail: bool = False
+    tool_names: List[str] | None = None, include_gmail: bool = False
 ) -> List[BaseTool]:
     """Get specified tools or all tools if tool_names is None.
 
@@ -15,11 +16,11 @@ def get_tools(
         List of tool objects
     """
     # Import default tools
-    from email_assistant.tools.default.email_tools import write_email, Done, Question
     from email_assistant.tools.default.calendar_tools import (
-        schedule_meeting,
         check_calendar_availability,
+        schedule_meeting,
     )
+    from email_assistant.tools.default.email_tools import Done, Question, write_email
 
     # Base tools dictionary
     all_tools = {
@@ -34,18 +35,20 @@ def get_tools(
     if include_gmail:
         try:
             from email_assistant.tools.gmail import (
-                fetch_emails_tool,
-                send_email_tool,
                 check_calendar_tool,
-                schedule_meeting_tool
+                fetch_emails_tool,
+                schedule_meeting_tool,
+                send_email_tool,
             )
 
-            all_tools.update({
-                "fetch_emails_tool": fetch_emails_tool,
-                "send_email_tool": send_email_tool,
-                "check_calendar_tool": check_calendar_tool,
-                "schedule_meeting_tool": schedule_meeting_tool,
-            })
+            all_tools.update(
+                {
+                    "fetch_emails_tool": fetch_emails_tool,
+                    "send_email_tool": send_email_tool,
+                    "check_calendar_tool": check_calendar_tool,
+                    "schedule_meeting_tool": schedule_meeting_tool,
+                }
+            )
         except ImportError:
             # If Gmail tools aren't available, continue without them
             pass
@@ -56,7 +59,7 @@ def get_tools(
     return [all_tools[name] for name in tool_names if name in all_tools]
 
 
-def get_tools_by_name(tools: Optional[List[BaseTool]] = None) -> Dict[str, BaseTool]:
+def get_tools_by_name(tools: List[BaseTool] | None = None) -> Dict[str, BaseTool]:
     """Get a dictionary of tools mapped by name."""
     if tools is None:
         tools = get_tools()

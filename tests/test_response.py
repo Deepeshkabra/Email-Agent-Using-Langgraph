@@ -1,23 +1,20 @@
-import uuid
 import importlib
-import sys
-import pytest
 import os
-from typing import Dict, List, Any, Tuple
-from pydantic import BaseModel, Field
+import sys
+import uuid
+from typing import Any, Dict, List, Tuple
+
+# ruff: noqa: E402, F841
+import pytest
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-
-from langsmith import testing as t
-
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.store.memory import InMemoryStore
 from langgraph.types import Command
+from langsmith import testing as t
+from pydantic import BaseModel, Field
 
 from email_assistant.utils import extract_tool_calls, format_messages_string
-from email_assistant.eval.prompts import RESPONSE_CRITERIA_SYSTEM_PROMPT
-
-
-from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
@@ -27,9 +24,9 @@ if "email_assistant.eval.email_dataset" in sys.modules:
 from email_assistant.eval.email_dataset import (
     email_inputs,
     email_names,
+    expected_tool_calls,
     response_criteria_list,
     triage_outputs_list,
-    expected_tool_calls,
 )
 
 

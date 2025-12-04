@@ -1,10 +1,11 @@
-from typing import List, Any
 import json
+from typing import Any, List
+
 import html2text
 
 
 def format_email_markdown(subject, author, to, email_thread, email_id=None):
-    """Format email details into a nicely formatted markdown string for display
+    """Format email details into a nicely formatted markdown string for display.
 
     Args:
         subject: Email subject
@@ -27,9 +28,8 @@ def format_email_markdown(subject, author, to, email_thread, email_id=None):
 """
 
 
-def format_gmail_markdown(subject, author, to, email_thread, email_id=None):
-    """Format Gmail email details into a nicely formatted markdown string for display,
-    with HTML to text conversion for HTML content
+def format_gmail_markdown(subject, author, to, email_thread, email_id=None): # noqa: D205
+    """Format Gmail email details into a nicely formatted markdown string for display, with HTML to text conversion for HTML content.
 
     Args:
         subject: Email subject
@@ -66,7 +66,7 @@ def format_gmail_markdown(subject, author, to, email_thread, email_id=None):
 
 
 def format_for_display(tool_call):
-    """Format content for display in Agent Inbox
+    """Format content for display in Agent Inbox.
 
     Args:
         tool_call: The tool call to format
@@ -159,7 +159,6 @@ def parse_gmail(email_input: dict) -> tuple[str, str, str, str, str]:
             - email_thread: Full email content
             - email_id: Email ID (or None if not available)
     """
-
     print("!Email_input from Gmail!")
     print(email_input)
 

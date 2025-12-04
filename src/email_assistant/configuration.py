@@ -2,9 +2,10 @@
 
 import os
 from dataclasses import dataclass, fields
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
+
 
 @dataclass(kw_only=True)
 class Configuration:
@@ -12,7 +13,7 @@ class Configuration:
 
     @classmethod
     def from_runnable_config(
-        cls, config: Optional[RunnableConfig] = None
+        cls, config: RunnableConfig | None = None
     ) -> "Configuration":
         """Create a Configuration instance from a RunnableConfig."""
         configurable = (

@@ -1,6 +1,7 @@
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:

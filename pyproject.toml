@@ -46,7 +46,6 @@ lint.select = [
     "I",    # isort
     "D",    # pydocstyle
     "D401", # First line should be in imperative mood
-    "T201",
     "UP",
 ]
 lint.ignore = [
@@ -55,6 +54,8 @@ lint.ignore = [
     "UP035",
     "D417",
     "E501",
+    "D100",
+    "D104"
 ]
 
 [tool.ruff.lint.per-file-ignores]

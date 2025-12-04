@@ -1,25 +1,43 @@
+import os
 from typing import Literal
 
-from langchain_openai import ChatOpenAI
-
-from langgraph.graph import StateGraph, START, END
-from langgraph.store.base import BaseStore
-from langgraph.types import interrupt, Command
-
-from email_assistant.tools import get_tools, get_tools_by_name
-from email_assistant.tools.gmail.prompt_templates import GMAIL_TOOLS_PROMPT
-from email_assistant.tools.gmail.gmail_tools import mark_as_read
-from email_assistant.prompts import triage_system_prompt, triage_user_prompt, agent_system_prompt_hitl_memory, default_triage_instructions, default_background, default_response_preferences, default_cal_preferences, MEMORY_UPDATE_INSTRUCTIONS, MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT
-from email_assistant.schemas import State, RouterSchema, StateInput, UserPreferences
-from email_assistant.utils import parse_gmail, format_for_display, format_gmail_markdown
 from dotenv import load_dotenv
-import os
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, START, StateGraph
+from langgraph.store.base import BaseStore
+from langgraph.types import Command, interrupt
+
+from email_assistant.prompts import (
+    MEMORY_UPDATE_INSTRUCTIONS,
+    MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT,
+    agent_system_prompt_hitl_memory,
+    default_background,
+    default_cal_preferences,
+    default_response_preferences,
+    default_triage_instructions,
+    triage_system_prompt,
+    triage_user_prompt,
+)
+from email_assistant.schemas import RouterSchema, State, StateInput, UserPreferences
+from email_assistant.tools import get_tools, get_tools_by_name
+from email_assistant.tools.gmail.gmail_tools import mark_as_read
+from email_assistant.tools.gmail.prompt_templates import GMAIL_TOOLS_PROMPT
+from email_assistant.utils import format_for_display, format_gmail_markdown, parse_gmail
 
 load_dotenv()
 openrouter_api_key = os.getenv("OPENROUTER_FREE_TESTING_KEY")
 openrouter_api_key_paid = os.getenv("OPENROUTER_PERSONAL_BILLED_KEY")
 # Get tools with Gmail tools
-tools = get_tools(["send_email_tool", "schedule_meeting_tool", "check_calendar_tool", "Question", "Done"], include_gmail=True)
+tools = get_tools(
+    [
+        "send_email_tool",
+        "schedule_meeting_tool",
+        "check_calendar_tool",
+        "Question",
+        "Done",
+    ],
+    include_gmail=True,
+)
 tools_by_name = get_tools_by_name(tools)
 
 # Initialize the LLM for use with router / structured output
@@ -27,63 +45,68 @@ llm = ChatOpenAI(
     model="google/gemini-2.5-flash-lite",
     api_key=openrouter_api_key_paid,
     base_url="https://openrouter.ai/api/v1",
-    extra_body={"provider": {
-        "require_parameters": True,
-        "only": ["google-vertex"],++
-        "allow_fallbacks": False,
-    }},
+    extra_body={
+        "provider": {
+            "require_parameters": True,
+            "only": ["google-vertex"],
+            ++"allow_fallbacks": False,
+        }
+    },
 )
-llm_router = llm.with_structured_output(RouterSchema) 
+llm_router = llm.with_structured_output(RouterSchema)
 
 # Initialize the LLM, enforcing tool use (of any available tools) for agent
 llm = ChatOpenAI(
     model="google/gemini-2.5-flash-lite",
     api_key=openrouter_api_key_paid,
     base_url="https://openrouter.ai/api/v1",
-    extra_body={"provider": {
-        "require_parameters": True,
-        "only": ["google-vertex"],
-        "allow_fallbacks": False,
-    }},
+    extra_body={
+        "provider": {
+            "require_parameters": True,
+            "only": ["google-vertex"],
+            "allow_fallbacks": False,
+        }
+    },
 )
 llm_with_tools = llm.bind_tools(tools, tool_choice="required")
 
+
 def get_memory(store, namespace, default_content=None):
     """Get memory from the store or initialize with default if it doesn't exist.
-    
+
     Args:
         store: LangGraph BaseStore instance to search for existing memory
         namespace: Tuple defining the memory namespace, e.g. ("email_assistant", "triage_preferences")
         default_content: Default content to use if memory doesn't exist
-        
+
     Returns:
         str: The content of the memory profile, either from existing memory or the default
     """
     # Search for existing memory with namespace and key
     user_preferences = store.get(namespace, "user_preferences")
-    
+
     # If memory exists, return its content (the value)
     if user_preferences:
         return user_preferences.value
-    
+
     # If memory doesn't exist, add it to the store and return the default content
     else:
         # Namespace, key, value
         store.put(namespace, "user_preferences", default_content)
         user_preferences = default_content
-    
+
     # Return the default content
-    return user_preferences 
+    return user_preferences
+
 
 def update_memory(store, namespace, messages):
     """Update memory profile in the store.
-    
+
     Args:
         store: LangGraph BaseStore instance to update memory
         namespace: Tuple defining the memory namespace, e.g. ("email_assistant", "triage_preferences")
         messages: List of messages to update the memory with
     """
-
     # Get the existing memory
     user_preferences = store.get(namespace, "user_preferences")
     # Update the memory
@@ -91,22 +114,33 @@ def update_memory(store, namespace, messages):
         model="google/gemini-2.5-flash-lite",
         api_key=openrouter_api_key_paid,
         base_url="https://openrouter.ai/api/v1",
-        extra_body = {"provider": {
-            "require_parameters": True,
+        extra_body={
+            "provider": {
+                "require_parameters": True,
                 "only": ["google-vertex"],
                 "allow_fallbacks": False,
-            }},
+            }
+        },
     ).with_structured_output(UserPreferences)
     result = llm.invoke(
         [
-            {"role": "system", "content": MEMORY_UPDATE_INSTRUCTIONS.format(current_profile=user_preferences.value, namespace=namespace)},
-        ] + messages
+            {
+                "role": "system",
+                "content": MEMORY_UPDATE_INSTRUCTIONS.format(
+                    current_profile=user_preferences.value, namespace=namespace
+                ),
+            },
+        ]
+        + messages
     )
     # Save the updated memory to the store
     store.put(namespace, "user_preferences", result.user_preferences)
 
-# Nodes 
-def triage_router(state: State, store: BaseStore) -> Command[Literal["triage_interrupt_handler", "response_agent", "__end__"]]:
+
+# Nodes
+def triage_router(
+    state: State, store: BaseStore
+) -> Command[Literal["triage_interrupt_handler", "response_agent", "__end__"]]:
     """Analyze email content to decide if we should respond, notify, or ignore.
 
     The triage step prevents the assistant from wasting time on:
@@ -114,18 +148,19 @@ def triage_router(state: State, store: BaseStore) -> Command[Literal["triage_int
     - Company-wide announcements
     - Messages meant for other teams
     """
-    
     # Parse the email input
     author, to, subject, email_thread, email_id = parse_gmail(state["email_input"])
     user_prompt = triage_user_prompt.format(
         author=author, to=to, subject=subject, email_thread=email_thread
     )
 
-    # Create email markdown for Agent Inbox in case of notification  
+    # Create email markdown for Agent Inbox in case of notification
     email_markdown = format_gmail_markdown(subject, author, to, email_thread, email_id)
 
     # Search for existing triage_preferences memory
-    triage_instructions = get_memory(store, ("email_assistant", "triage_preferences"), default_triage_instructions)
+    triage_instructions = get_memory(
+        store, ("email_assistant", "triage_preferences"), default_triage_instructions
+    )
 
     # Format system prompt with background and triage instructions
     system_prompt = triage_system_prompt.format(
@@ -152,11 +187,11 @@ def triage_router(state: State, store: BaseStore) -> Command[Literal["triage_int
         # Update the state
         update = {
             "classification_decision": result.classification,
-            "messages": [{"role": "user",
-                            "content": f"Respond to the email: {email_markdown}"
-                        }],
+            "messages": [
+                {"role": "user", "content": f"Respond to the email: {email_markdown}"}
+            ],
         }
-        
+
     elif classification == "ignore":
         print("🚫 Classification: IGNORE - This email can be safely ignored")
 
@@ -168,7 +203,7 @@ def triage_router(state: State, store: BaseStore) -> Command[Literal["triage_int
         }
 
     elif classification == "notify":
-        print("🔔 Classification: NOTIFY - This email contains important information") 
+        print("🔔 Classification: NOTIFY - This email contains important information")
 
         # Next node
         goto = "triage_interrupt_handler"
@@ -179,34 +214,36 @@ def triage_router(state: State, store: BaseStore) -> Command[Literal["triage_int
 
     else:
         raise ValueError(f"Invalid classification: {classification}")
-    
+
     return Command(goto=goto, update=update)
 
-def triage_interrupt_handler(state: State, store: BaseStore) -> Command[Literal["response_agent", "__end__"]]:
-    """Handles interrupts from the triage step"""
-    
+
+def triage_interrupt_handler(
+    state: State, store: BaseStore
+) -> Command[Literal["response_agent", "__end__"]]:
+    """Handle interrupts from the triage step."""
     # Parse the email input
     author, to, subject, email_thread, email_id = parse_gmail(state["email_input"])
 
-    # Create email markdown for Agent Inbox in case of notification  
+    # Create email markdown for Agent Inbox in case of notification
     email_markdown = format_gmail_markdown(subject, author, to, email_thread, email_id)
 
     # Create messages
-    messages = [{"role": "user",
-                "content": f"Email to notify user about: {email_markdown}"
-                }]
+    messages = [
+        {"role": "user", "content": f"Email to notify user about: {email_markdown}"}
+    ]
 
     # Create interrupt for Agent Inbox
     request = {
         "action_request": {
             "action": f"Email Assistant: {state['classification_decision']}",
-            "args": {}
+            "args": {},
         },
         "config": {
-            "allow_ignore": True,  
+            "allow_ignore": True,
             "allow_respond": True,
-            "allow_edit": True, 
-            "allow_accept": True,  
+            "allow_edit": True,
+            "allow_accept": True,
         },
         # Email to show in Agent Inbox
         "description": email_markdown,
@@ -215,28 +252,41 @@ def triage_interrupt_handler(state: State, store: BaseStore) -> Command[Literal[
     # Send to Agent Inbox and wait for response
     response = interrupt([request])[0]
 
-    # If user provides feedback, go to response agent and use feedback to respond to email   
+    # If user provides feedback, go to response agent and use feedback to respond to email
     if response["type"] == "response":
-        # Add feedback to messages 
+        # Add feedback to messages
         user_input = response["args"]
-        messages.append({"role": "user",
-                        "content": f"User wants to reply to the email. Use this feedback to respond: {user_input}"
-                        })
+        messages.append(
+            {
+                "role": "user",
+                "content": f"User wants to reply to the email. Use this feedback to respond: {user_input}",
+            }
+        )
         # Update memory with feedback
-        update_memory(store, ("email_assistant", "triage_preferences"), [{
-            "role": "user",
-            "content": f"The user decided to respond to the email, so update the triage preferences to capture this."
-        }] + messages)
+        update_memory(
+            store,
+            ("email_assistant", "triage_preferences"),
+            [
+                {
+                    "role": "user",
+                    "content": "The user decided to respond to the email, so update the triage preferences to capture this.",
+                }
+            ]
+            + messages,
+        )
 
         goto = "response_agent"
 
     # If user ignores email, go to END
     elif response["type"] == "ignore":
         # Make note of the user's decision to ignore the email
-        messages.append({"role": "user",
-                        "content": f"The user decided to ignore the email even though it was classified as notify. Update triage preferences to capture this."
-                        })
-        # Update memory with feedback 
+        messages.append(
+            {
+                "role": "user",
+                "content": "The user decided to ignore the email even though it was classified as notify. Update triage preferences to capture this.",
+            }
+        )
+        # Update memory with feedback
         update_memory(store, ("email_assistant", "triage_preferences"), messages)
         goto = END
 
@@ -244,41 +294,50 @@ def triage_interrupt_handler(state: State, store: BaseStore) -> Command[Literal[
     else:
         raise ValueError(f"Invalid response: {response}")
 
-    # Update the state 
+    # Update the state
     update = {
         "messages": messages,
     }
 
     return Command(goto=goto, update=update)
 
+
 def llm_call(state: State, store: BaseStore):
-    """LLM decides whether to call a tool or not"""
-    
+    """LLM decide whether to call a tool or not."""
     # Search for existing cal_preferences memory
-    cal_preferences = get_memory(store, ("email_assistant", "cal_preferences"), default_cal_preferences)
-    
+    cal_preferences = get_memory(
+        store, ("email_assistant", "cal_preferences"), default_cal_preferences
+    )
+
     # Search for existing response_preferences memory
-    response_preferences = get_memory(store, ("email_assistant", "response_preferences"), default_response_preferences)
+    response_preferences = get_memory(
+        store, ("email_assistant", "response_preferences"), default_response_preferences
+    )
 
     return {
         "messages": [
             llm_with_tools.invoke(
                 [
-                    {"role": "system", "content": agent_system_prompt_hitl_memory.format(
-                        tools_prompt=GMAIL_TOOLS_PROMPT,
-                        background=default_background,
-                        response_preferences=response_preferences, 
-                        cal_preferences=cal_preferences
-                    )}
+                    {
+                        "role": "system",
+                        "content": agent_system_prompt_hitl_memory.format(
+                            tools_prompt=GMAIL_TOOLS_PROMPT,
+                            background=default_background,
+                            response_preferences=response_preferences,
+                            cal_preferences=cal_preferences,
+                        ),
+                    }
                 ]
                 + state["messages"]
             )
         ]
     }
-    
-def interrupt_handler(state: State, store: BaseStore) -> Command[Literal["llm_call", "__end__"]]:
-    """Creates an interrupt for human review of tool calls"""
-    
+
+
+def interrupt_handler(
+    state: State, store: BaseStore
+) -> Command[Literal["llm_call", "__end__"]]:
+    """Create an interrupt for human review of tool calls."""
     # Store messages
     result = []
 
@@ -287,24 +346,30 @@ def interrupt_handler(state: State, store: BaseStore) -> Command[Literal["llm_ca
 
     # Iterate over the tool calls in the last message
     for tool_call in state["messages"][-1].tool_calls:
-        
         # Allowed tools for HITL
         hitl_tools = ["send_email_tool", "schedule_meeting_tool", "Question"]
-        
+
         # If tool is not in our HITL list, execute it directly without interruption
         if tool_call["name"] not in hitl_tools:
-
             # Execute search_memory and other tools without interruption
             tool = tools_by_name[tool_call["name"]]
             observation = tool.invoke(tool_call["args"])
-            result.append({"role": "tool", "content": observation, "tool_call_id": tool_call["id"]})
+            result.append(
+                {
+                    "role": "tool",
+                    "content": observation,
+                    "tool_call_id": tool_call["id"],
+                }
+            )
             continue
-            
+
         # Get original email from email_input in state
         email_input = state["email_input"]
         author, to, subject, email_thread, email_id = parse_gmail(email_input)
-        original_email_markdown = format_gmail_markdown(subject, author, to, email_thread, email_id)
-        
+        original_email_markdown = format_gmail_markdown(
+            subject, author, to, email_thread, email_id
+        )
+
         # Format tool call for display and prepend the original email
         tool_display = format_for_display(tool_call)
         description = original_email_markdown + tool_display
@@ -336,10 +401,7 @@ def interrupt_handler(state: State, store: BaseStore) -> Command[Literal["llm_ca
 
         # Create the interrupt request
         request = {
-            "action_request": {
-                "action": tool_call["name"],
-                "args": tool_call["args"]
-            },
+            "action_request": {"action": tool_call["name"], "args": tool_call["args"]},
             "config": config,
             "description": description,
         }
@@ -347,105 +409,175 @@ def interrupt_handler(state: State, store: BaseStore) -> Command[Literal["llm_ca
         # Send to Agent Inbox and wait for response
         response = interrupt([request])[0]
 
-        # Handle the responses 
+        # Handle the responses
         if response["type"] == "accept":
-
             # Execute the tool with original args
             tool = tools_by_name[tool_call["name"]]
             observation = tool.invoke(tool_call["args"])
-            result.append({"role": "tool", "content": observation, "tool_call_id": tool_call["id"]})
-                        
-        elif response["type"] == "edit":
+            result.append(
+                {
+                    "role": "tool",
+                    "content": observation,
+                    "tool_call_id": tool_call["id"],
+                }
+            )
 
-            # Tool selection 
+        elif response["type"] == "edit":
+            # Tool selection
             tool = tools_by_name[tool_call["name"]]
             initial_tool_call = tool_call["args"]
-            
+
             # Get edited args from Agent Inbox
             edited_args = response["args"]["args"]
 
             # Update the AI message's tool call with edited content (reference to the message in the state)
-            ai_message = state["messages"][-1] # Get the most recent message from the state
-            current_id = tool_call["id"] # Store the ID of the tool call being edited
-            
+            ai_message = state["messages"][
+                -1
+            ]  # Get the most recent message from the state
+            current_id = tool_call["id"]  # Store the ID of the tool call being edited
+
             # Create a new list of tool calls by filtering out the one being edited and adding the updated version
             # This avoids modifying the original list directly (immutable approach)
-            updated_tool_calls = [tc for tc in ai_message.tool_calls if tc["id"] != current_id] + [
-                {"type": "tool_call", "name": tool_call["name"], "args": edited_args, "id": current_id}
+            updated_tool_calls = [
+                tc for tc in ai_message.tool_calls if tc["id"] != current_id
+            ] + [
+                {
+                    "type": "tool_call",
+                    "name": tool_call["name"],
+                    "args": edited_args,
+                    "id": current_id,
+                }
             ]
 
             # Create a new copy of the message with updated tool calls rather than modifying the original
             # This ensures state immutability and prevents side effects in other parts of the code
-            result.append(ai_message.model_copy(update={"tool_calls": updated_tool_calls}))
+            result.append(
+                ai_message.model_copy(update={"tool_calls": updated_tool_calls})
+            )
 
             # Save feedback in memory and update the write_email tool call with the edited content from Agent Inbox
             if tool_call["name"] == "send_email_tool":
-                
                 # Execute the tool with edited args
                 observation = tool.invoke(edited_args)
-                
+
                 # Add only the tool response message
-                result.append({"role": "tool", "content": observation, "tool_call_id": current_id})
+                result.append(
+                    {"role": "tool", "content": observation, "tool_call_id": current_id}
+                )
 
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "response_preferences"), [{
-                    "role": "user",
-                    "content": f"User edited the email response. Here is the initial email generated by the assistant: {initial_tool_call}. Here is the edited email: {edited_args}. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
-            
+                update_memory(
+                    store,
+                    ("email_assistant", "response_preferences"),
+                    [
+                        {
+                            "role": "user",
+                            "content": f"User edited the email response. Here is the initial email generated by the assistant: {initial_tool_call}. Here is the edited email: {edited_args}. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
+
             # Save feedback in memory and update the schedule_meeting tool call with the edited content from Agent Inbox
             elif tool_call["name"] == "schedule_meeting_tool":
-                
                 # Execute the tool with edited args
                 observation = tool.invoke(edited_args)
-                
+
                 # Add only the tool response message
-                result.append({"role": "tool", "content": observation, "tool_call_id": current_id})
+                result.append(
+                    {"role": "tool", "content": observation, "tool_call_id": current_id}
+                )
 
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "cal_preferences"), [{
-                    "role": "user",
-                    "content": f"User edited the calendar invitation. Here is the initial calendar invitation generated by the assistant: {initial_tool_call}. Here is the edited calendar invitation: {edited_args}. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
-            
+                update_memory(
+                    store,
+                    ("email_assistant", "cal_preferences"),
+                    [
+                        {
+                            "role": "user",
+                            "content": f"User edited the calendar invitation. Here is the initial calendar invitation generated by the assistant: {initial_tool_call}. Here is the edited calendar invitation: {edited_args}. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
+
             # Catch all other tool calls
             else:
                 raise ValueError(f"Invalid tool call: {tool_call['name']}")
 
         elif response["type"] == "ignore":
-
             if tool_call["name"] == "send_email_tool":
                 # Don't execute the tool, and tell the agent how to proceed
-                result.append({"role": "tool", "content": "User ignored this email draft. Ignore this email and end the workflow.", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": "User ignored this email draft. Ignore this email and end the workflow.",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
                 # Go to END
                 goto = END
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "triage_preferences"), state["messages"] + result + [{
-                    "role": "user",
-                    "content": f"The user ignored the email draft. That means they did not want to respond to the email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
+                update_memory(
+                    store,
+                    ("email_assistant", "triage_preferences"),
+                    state["messages"]
+                    + result
+                    + [
+                        {
+                            "role": "user",
+                            "content": f"The user ignored the email draft. That means they did not want to respond to the email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
 
             elif tool_call["name"] == "schedule_meeting_tool":
                 # Don't execute the tool, and tell the agent how to proceed
-                result.append({"role": "tool", "content": "User ignored this calendar meeting draft. Ignore this email and end the workflow.", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": "User ignored this calendar meeting draft. Ignore this email and end the workflow.",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
                 # Go to END
                 goto = END
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "triage_preferences"), state["messages"] + result + [{
-                    "role": "user",
-                    "content": f"The user ignored the calendar meeting draft. That means they did not want to schedule a meeting for this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
+                update_memory(
+                    store,
+                    ("email_assistant", "triage_preferences"),
+                    state["messages"]
+                    + result
+                    + [
+                        {
+                            "role": "user",
+                            "content": f"The user ignored the calendar meeting draft. That means they did not want to schedule a meeting for this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
 
             elif tool_call["name"] == "Question":
                 # Don't execute the tool, and tell the agent how to proceed
-                result.append({"role": "tool", "content": "User ignored this question. Ignore this email and end the workflow.", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": "User ignored this question. Ignore this email and end the workflow.",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
                 # Go to END
                 goto = END
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "triage_preferences"), state["messages"] + result + [{
-                    "role": "user",
-                    "content": f"The user ignored the Question. That means they did not want to answer the question or deal with this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
+                update_memory(
+                    store,
+                    ("email_assistant", "triage_preferences"),
+                    state["messages"]
+                    + result
+                    + [
+                        {
+                            "role": "user",
+                            "content": f"The user ignored the Question. That means they did not want to answer the question or deal with this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
 
             else:
                 raise ValueError(f"Invalid tool call: {tool_call['name']}")
@@ -455,53 +587,93 @@ def interrupt_handler(state: State, store: BaseStore) -> Command[Literal["llm_ca
             user_feedback = response["args"]
             if tool_call["name"] == "send_email_tool":
                 # Don't execute the tool, and add a message with the user feedback to incorporate into the email
-                result.append({"role": "tool", "content": f"User gave feedback, which can we incorporate into the email. Feedback: {user_feedback}", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": f"User gave feedback, which can we incorporate into the email. Feedback: {user_feedback}",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "response_preferences"), state["messages"] + result + [{
-                    "role": "user",
-                    "content": f"User gave feedback, which we can use to update the response preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
+                update_memory(
+                    store,
+                    ("email_assistant", "response_preferences"),
+                    state["messages"]
+                    + result
+                    + [
+                        {
+                            "role": "user",
+                            "content": f"User gave feedback, which we can use to update the response preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
 
             elif tool_call["name"] == "schedule_meeting_tool":
                 # Don't execute the tool, and add a message with the user feedback to incorporate into the email
-                result.append({"role": "tool", "content": f"User gave feedback, which can we incorporate into the meeting request. Feedback: {user_feedback}", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": f"User gave feedback, which can we incorporate into the meeting request. Feedback: {user_feedback}",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
                 # This is new: update the memory
-                update_memory(store, ("email_assistant", "cal_preferences"), state["messages"] + result + [{
-                    "role": "user",
-                    "content": f"User gave feedback, which we can use to update the calendar preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}."
-                }])
+                update_memory(
+                    store,
+                    ("email_assistant", "cal_preferences"),
+                    state["messages"]
+                    + result
+                    + [
+                        {
+                            "role": "user",
+                            "content": f"User gave feedback, which we can use to update the calendar preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                        }
+                    ],
+                )
 
             elif tool_call["name"] == "Question":
                 # Don't execute the tool, and add a message with the user feedback to incorporate into the email
-                result.append({"role": "tool", "content": f"User answered the question, which can we can use for any follow up actions. Feedback: {user_feedback}", "tool_call_id": tool_call["id"]})
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": f"User answered the question, which can we can use for any follow up actions. Feedback: {user_feedback}",
+                        "tool_call_id": tool_call["id"],
+                    }
+                )
 
             else:
                 raise ValueError(f"Invalid tool call: {tool_call['name']}")
 
-    # Update the state 
+    # Update the state
     update = {
         "messages": result,
     }
 
     return Command(goto=goto, update=update)
 
+
 # Conditional edge function
-def should_continue(state: State, store: BaseStore) -> Literal["interrupt_handler", "mark_as_read_node"]:
-    """Route to tool handler, or end if Done tool called"""
+def should_continue(
+    state: State, store: BaseStore
+) -> Literal["interrupt_handler", "mark_as_read_node"]:
+    """Route to tool handler, or end if Done tool called."""
     messages = state["messages"]
     last_message = messages[-1]
     if last_message.tool_calls:
-        for tool_call in last_message.tool_calls: 
+        for tool_call in last_message.tool_calls:
             if tool_call["name"] == "Done":
-                # TODO: Here, we could update the background memory with the email-response for follow up actions. 
+                # TODO: Here, we could update the background memory with the email-response for follow up actions.
                 return "mark_as_read_node"
             else:
                 return "interrupt_handler"
 
+
 def mark_as_read_node(state: State):
+    """Mark the email as read."""
     email_input = state["email_input"]
     author, to, subject, email_thread, email_id = parse_gmail(email_input)
     mark_as_read(email_id)
+
 
 # Build workflow
 agent_builder = StateGraph(State)
