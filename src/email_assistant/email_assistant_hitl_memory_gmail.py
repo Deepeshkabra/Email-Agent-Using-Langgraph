@@ -49,7 +49,7 @@ llm = ChatOpenAI(
         "provider": {
             "require_parameters": True,
             "only": ["google-vertex"],
-            ++"allow_fallbacks": False,
+            "allow_fallbacks": False,
         }
     },
 )
