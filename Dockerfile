@@ -9,7 +9,7 @@ ADD . /deps/Email-Agent-Using-Langgraph
 # -- Installing all local dependencies --
 RUN for dep in /deps/*; do             echo "Installing $dep";             if [ -d "$dep" ]; then                 echo "Installing $dep";                 (cd "$dep" && PYTHONDONTWRITEBYTECODE=1 uv pip install --system --no-cache-dir -c /api/constraints.txt -e .);             fi;         done
 # -- End of local dependencies install --
-ENV LANGSERVE_GRAPHS='{"email_assistant": "/deps/Email-Agent-Using-Langgraph/src/email_assistant/email_assistant.py:email_assistant", "email_assistant_hitl": "/deps/Email-Agent-Using-Langgraph/src/email_assistant/email_assistant_hitl.py:email_assistant_hitl", "email_assistant_hitl_memory": "/deps/Email-Agent-Using-Langgraph/src/email_assistant/email_assistant_hitl_memory.py:email_assistant_hitl_memory", "email_assistant_hitl_memory_gmail": "/deps/Email-Agent-Using-Langgraph/src/email_assistant/email_assistant_hitl_memory_gmail.py:email_assistant_hitl_memory_gmail"}'
+ENV LANGSERVE_GRAPHS='{"email_assistant_hitl_memory_gmail": "/deps/Email-Agent-Using-Langgraph/src/email_assistant/email_assistant_hitl_memory_gmail.py:email_assistant_hitl_memory_gmail"}'
 
 
 
