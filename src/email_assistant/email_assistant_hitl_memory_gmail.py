@@ -25,7 +25,7 @@ from email_assistant.tools.gmail.prompt_templates import GMAIL_TOOLS_PROMPT
 from email_assistant.utils import format_for_display, format_gmail_markdown, parse_gmail
 
 load_dotenv()
-openrouter_api_key = os.getenv("OPENROUTER_FREE_TESTING_KEY")
+# openrouter_api_key = os.getenv("OPENROUTER_FREE_TESTING_KEY")
 openrouter_api_key_paid = os.getenv("OPENROUTER_PERSONAL_BILLED_KEY")
 # Get tools with Gmail tools
 tools = get_tools(
