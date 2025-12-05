@@ -262,17 +262,16 @@ def triage_interrupt_handler(
                 "content": f"User wants to reply to the email. Use this feedback to respond: {user_input}",
             }
         )
-        # Update memory with feedback
+        # Update memory with feedback - pass only relevant context
         update_memory(
             store,
             ("email_assistant", "triage_preferences"),
             [
                 {
                     "role": "user",
-                    "content": "The user decided to respond to the email, so update the triage preferences to capture this.",
+                    "content": f"Email context - From: {author}, Subject: {subject}. The email was classified as 'notify' but the user decided to respond to it. Update the triage preferences to ensure similar emails from this sender or with this type of subject are classified as 'respond' instead of 'notify'. User's feedback: {user_input}",
                 }
-            ]
-            + messages,
+            ],
         )
 
         goto = "response_agent"
@@ -286,8 +285,17 @@ def triage_interrupt_handler(
                 "content": "The user decided to ignore the email even though it was classified as notify. Update triage preferences to capture this.",
             }
         )
-        # Update memory with feedback
-        update_memory(store, ("email_assistant", "triage_preferences"), messages)
+        # Update memory with feedback - pass only relevant context
+        update_memory(
+            store,
+            ("email_assistant", "triage_preferences"),
+            [
+                {
+                    "role": "user",
+                    "content": f"Email context - From: {author}, Subject: {subject}. The email was classified as 'notify' but the user decided to ignore it. Update the triage preferences to ensure similar emails from this sender or with this type of subject are classified as 'ignore' instead of 'notify'.",
+                }
+            ],
+        )
         goto = END
 
     # Catch all other responses
@@ -515,16 +523,14 @@ def interrupt_handler(
                 )
                 # Go to END
                 goto = END
-                # This is new: update the memory
+                # Update memory with only relevant context
                 update_memory(
                     store,
                     ("email_assistant", "triage_preferences"),
-                    state["messages"]
-                    + result
-                    + [
+                    [
                         {
                             "role": "user",
-                            "content": f"The user ignored the email draft. That means they did not want to respond to the email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                            "content": f"Email context - From: {author}, Subject: {subject}. The assistant drafted an email response but the user ignored/rejected it. This means the user did not want to respond to this email. Update the triage preferences to ensure similar emails are classified as 'ignore' instead of 'respond'. {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}",
                         }
                     ],
                 )
@@ -540,16 +546,14 @@ def interrupt_handler(
                 )
                 # Go to END
                 goto = END
-                # This is new: update the memory
+                # Update memory with only relevant context
                 update_memory(
                     store,
                     ("email_assistant", "triage_preferences"),
-                    state["messages"]
-                    + result
-                    + [
+                    [
                         {
                             "role": "user",
-                            "content": f"The user ignored the calendar meeting draft. That means they did not want to schedule a meeting for this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                            "content": f"Email context - From: {author}, Subject: {subject}. The assistant drafted a meeting invitation but the user ignored/rejected it. This means the user did not want to schedule a meeting for this email. Update the triage preferences to ensure similar emails are classified as 'ignore' instead of 'respond'. {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}",
                         }
                     ],
                 )
@@ -565,16 +569,14 @@ def interrupt_handler(
                 )
                 # Go to END
                 goto = END
-                # This is new: update the memory
+                # Update memory with only relevant context
                 update_memory(
                     store,
                     ("email_assistant", "triage_preferences"),
-                    state["messages"]
-                    + result
-                    + [
+                    [
                         {
                             "role": "user",
-                            "content": f"The user ignored the Question. That means they did not want to answer the question or deal with this email. Update the triage preferences to ensure emails of this type are not classified as respond. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                            "content": f"Email context - From: {author}, Subject: {subject}. The assistant asked a clarifying question but the user ignored it. This means the user did not want to deal with this email. Update the triage preferences to ensure similar emails are classified as 'ignore' instead of 'respond'. {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}",
                         }
                     ],
                 )
@@ -594,16 +596,14 @@ def interrupt_handler(
                         "tool_call_id": tool_call["id"],
                     }
                 )
-                # This is new: update the memory
+                # Update memory with only relevant context
                 update_memory(
                     store,
                     ("email_assistant", "response_preferences"),
-                    state["messages"]
-                    + result
-                    + [
+                    [
                         {
                             "role": "user",
-                            "content": f"User gave feedback, which we can use to update the response preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                            "content": f"Email context - From: {author}, Subject: {subject}. The assistant drafted an email response with: {tool_call['args']}. The user provided feedback to improve it: '{user_feedback}'. Update the response preferences to incorporate this feedback for future emails. {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}",
                         }
                     ],
                 )
@@ -617,16 +617,14 @@ def interrupt_handler(
                         "tool_call_id": tool_call["id"],
                     }
                 )
-                # This is new: update the memory
+                # Update memory with only relevant context
                 update_memory(
                     store,
                     ("email_assistant", "cal_preferences"),
-                    state["messages"]
-                    + result
-                    + [
+                    [
                         {
                             "role": "user",
-                            "content": f"User gave feedback, which we can use to update the calendar preferences. Follow all instructions above, and remember: {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}.",
+                            "content": f"Email context - From: {author}, Subject: {subject}. The assistant drafted a meeting invitation with: {tool_call['args']}. The user provided feedback to improve it: '{user_feedback}'. Update the calendar preferences to incorporate this feedback for future meetings. {MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT}",
                         }
                     ],
                 )
