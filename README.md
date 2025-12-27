@@ -73,7 +73,7 @@ The email assistant is built as a hierarchical graph with two main components:
 
 ### Response Agent Subgraph
 
-![Response-Agent-SubGraph-Preview](./assets/images/Response-Agent-SubGraph-Image.png)
+![Response-Agent-SubGraph-Preview](./assets/images/Response-Agent-Subgraph-Image.png)
 
 ### Agent Responsibilities
 
